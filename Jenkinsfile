@@ -7,7 +7,7 @@ pipeline {
         TF_CLI_ARGS = '-no-color'
         // AWS credentials will be injected securely using your existing credential
         AWS_CREDENTIAL = 'Devops-project-id'
-        SSH_CRED_ID = 'ssh-private-key'
+        SSH_CRED_ID = '/home/abhi601/.ssh/devops.pem'
         PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${env.PATH}"
     }
     

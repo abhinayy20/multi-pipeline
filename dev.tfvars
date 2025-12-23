@@ -6,5 +6,5 @@ public_subnet_cidr  = "10.0.1.0/24"
 availability_zone   = "us-east-1a"
 instance_type       = "t3.micro"
 ami_id              = "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS
-key_name            = "devops"
+key_name            = "/home/abhi601/.ssh/devops.pem"
 root_volume_size    = 20
