@@ -134,13 +134,19 @@ pipeline {
             echo "Pipeline failed for branch: ${env.BRANCH_NAME}"
         }
         always {
-            cleanWs(
-                deleteDirs: true,
-                patterns: [
-                    [pattern: '*.tfplan', type: 'INCLUDE'],
-                    [pattern: '.terraform/', type: 'INCLUDE']
-                ]
-            )
+            script {
+                try {
+                    cleanWs(
+                        deleteDirs: true,
+                        patterns: [
+                            [pattern: '*.tfplan', type: 'INCLUDE'],
+                            [pattern: '.terraform/', type: 'INCLUDE']
+                        ]
+                    )
+                } catch (Exception e) {
+                    echo "Workspace cleanup skipped: ${e.message}"
+                }
+            }
         }
     }
 }
