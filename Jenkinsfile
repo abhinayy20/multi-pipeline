@@ -82,9 +82,44 @@ pipeline {
                     )
                     
                     if (userInput == 'Approve') {
-                        echo "Deployment approved! Ready for future apply stage..."
+                        echo "Deployment approved! Proceeding to apply..."
                     } else {
-                        echo "Deployment rejected. Pipeline will complete without applying changes."
+                        error "Deployment rejected by user. Aborting pipeline."
+                    }
+                }
+            }
+        }
+        
+        // Terraform Apply (executes after approval)
+        stage('Terraform Apply') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                    script {
+                        echo "Applying Terraform plan for ${env.BRANCH_NAME} environment"
+                        sh """#!/bin/bash
+                            terraform apply \
+                                -auto-approve \
+                                ${env.BRANCH_NAME}.tfplan
+                        """
+                        echo "Infrastructure deployed successfully!"
+                    }
+                }
+            }
+        }
+        
+        // Display Outputs
+        stage('Show Outputs') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                    script {
+                        echo "Displaying Terraform outputs:"
+                        sh '/bin/bash -c "terraform output"'
                     }
                 }
             }
