@@ -1,41 +1,41 @@
 pipeline {
     agent any
-    
-    // Task 2: Pipeline Environment & Credentials (20 Marks)
+
     environment {
         TF_IN_AUTOMATION = 'true'
-        TF_CLI_ARGS = '-no-color'
-        // AWS credentials will be injected securely using your existing credential
-        Devops-project-id = 'Devops-project-id'
-        SSH_CRED_ID = '/home/abhi601/.ssh/devops.pem'
+        TF_CLI_ARGS     = '-no-color'
+
+        // Jenkins Credentials IDs (CORRECT)
+        AWS_CRED_ID = 'Devops-project-id'
+        SSH_CRED_ID = 'devops-ssh-key'
+
         PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${env.PATH}"
     }
-    
+
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
                 echo "Checked out branch: ${env.BRANCH_NAME}"
             }
         }
-        
-        // Task 3: Initialization & Variable Inspection (20 Marks)
+
         stage('Terraform Initialization') {
             steps {
-                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
+                withCredentials([
+                    aws(credentialsId: env.AWS_CRED_ID)
+                ]) {
                     script {
                         echo "Initializing Terraform for branch: ${env.BRANCH_NAME}"
-                        sh '/bin/bash -c "terraform init"'
-                        
-                        // Display the contents of the branch-specific tfvars file
+                        sh 'terraform init'
+
                         echo "Displaying ${env.BRANCH_NAME}.tfvars configuration:"
-                        sh """#!/bin/bash
+                        sh """
                             if [ -f ${env.BRANCH_NAME}.tfvars ]; then
-                                echo "==== Contents of ${env.BRANCH_NAME}.tfvars ===="
                                 cat ${env.BRANCH_NAME}.tfvars
-                                echo "=============================================="
                             else
-                                echo "Warning: ${env.BRANCH_NAME}.tfvars not found!"
+                                echo "${env.BRANCH_NAME}.tfvars not found!"
                                 exit 1
                             fi
                         """
@@ -43,110 +43,71 @@ pipeline {
                 }
             }
         }
-        
-        // Task 4: Branch-Specific Terraform Planning (20 Marks)
+
         stage('Terraform Plan') {
             steps {
-                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
+                withCredentials([
+                    aws(credentialsId: env.AWS_CRED_ID)
+                ]) {
                     script {
-                        echo "Generating Terraform plan for ${env.BRANCH_NAME} environment"
-                        sh """#!/bin/bash
+                        echo "Generating Terraform plan for ${env.BRANCH_NAME}"
+                        sh """
                             terraform plan \
-                                -var-file=${env.BRANCH_NAME}.tfvars \
-                                -out=${env.BRANCH_NAME}.tfplan
+                              -var-file=${env.BRANCH_NAME}.tfvars \
+                              -out=${env.BRANCH_NAME}.tfplan
                         """
-                        echo "Terraform plan generated successfully!"
                     }
                 }
             }
         }
-        
-        // Task 5: Conditional Manual Approval Gate (20 Marks)
+
         stage('Validate Apply') {
-            when {
-                branch 'dev'
-            }
+            when { branch 'dev' }
             steps {
                 script {
-                    echo "Requesting approval for dev environment deployment..."
-                    def userInput = input(
-                        id: 'ApprovalGate',
-                        message: 'Do you want to apply this Terraform plan to the dev environment?',
-                        parameters: [
-                            choice(
-                                name: 'APPROVAL',
-                                choices: ['Approve', 'Reject'],
-                                description: 'Select Approve to proceed with terraform apply'
-                            )
-                        ]
-                    )
-                    
-                    if (userInput == 'Approve') {
-                        echo "Deployment approved! Proceeding to apply..."
-                    } else {
-                        error "Deployment rejected by user. Aborting pipeline."
-                    }
+                    input message: 'Approve Terraform apply for DEV?'
                 }
             }
         }
-        
-        // Terraform Apply (executes after approval)
+
         stage('Terraform Apply') {
-            when {
-                branch 'dev'
-            }
+            when { branch 'dev' }
             steps {
-                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
+                withCredentials([
+                    aws(credentialsId: env.AWS_CRED_ID)
+                ]) {
                     script {
-                        echo "Applying Terraform plan for ${env.BRANCH_NAME} environment"
-                        sh """#!/bin/bash
+                        sh """
                             terraform apply \
-                                -auto-approve \
-                                ${env.BRANCH_NAME}.tfplan
+                              -auto-approve \
+                              ${env.BRANCH_NAME}.tfplan
                         """
-                        echo "Infrastructure deployed successfully!"
                     }
                 }
             }
         }
-        
-        // Display Outputs
+
         stage('Show Outputs') {
-            when {
-                branch 'dev'
-            }
+            when { branch 'dev' }
             steps {
-                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
-                    script {
-                        echo "Displaying Terraform outputs:"
-                        sh '/bin/bash -c "terraform output"'
-                    }
+                withCredentials([
+                    aws(credentialsId: env.AWS_CRED_ID)
+                ]) {
+                    sh 'terraform output'
                 }
             }
         }
     }
-    
+
     post {
         success {
-            echo "Pipeline completed successfully for branch: ${env.BRANCH_NAME}"
+            echo "Pipeline completed successfully for ${env.BRANCH_NAME}"
         }
         failure {
-            echo "Pipeline failed for branch: ${env.BRANCH_NAME}"
+            echo "Pipeline failed for ${env.BRANCH_NAME}"
         }
         always {
-            script {
-                try {
-                    cleanWs(
-                        deleteDirs: true,
-                        patterns: [
-                            [pattern: '*.tfplan', type: 'INCLUDE'],
-                            [pattern: '.terraform/', type: 'INCLUDE']
-                        ]
-                    )
-                } catch (Exception e) {
-                    echo "Workspace cleanup skipped: ${e.message}"
-                }
-            }
+            cleanWs()
         }
     }
 }
