@@ -6,7 +6,7 @@ pipeline {
         TF_IN_AUTOMATION = 'true'
         TF_CLI_ARGS = '-no-color'
         // AWS credentials will be injected securely using your existing credential
-        AWS_CREDENTIAL = 'Devops-project-id'
+        Devops-project-id = 'Devops-project-id'
         SSH_CRED_ID = '/home/abhi601/.ssh/devops.pem'
         PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${env.PATH}"
     }
@@ -22,7 +22,7 @@ pipeline {
         // Task 3: Initialization & Variable Inspection (20 Marks)
         stage('Terraform Initialization') {
             steps {
-                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
                     script {
                         echo "Initializing Terraform for branch: ${env.BRANCH_NAME}"
                         sh '/bin/bash -c "terraform init"'
@@ -47,7 +47,7 @@ pipeline {
         // Task 4: Branch-Specific Terraform Planning (20 Marks)
         stage('Terraform Plan') {
             steps {
-                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
                     script {
                         echo "Generating Terraform plan for ${env.BRANCH_NAME} environment"
                         sh """#!/bin/bash
@@ -96,7 +96,7 @@ pipeline {
                 branch 'dev'
             }
             steps {
-                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
                     script {
                         echo "Applying Terraform plan for ${env.BRANCH_NAME} environment"
                         sh """#!/bin/bash
@@ -116,7 +116,7 @@ pipeline {
                 branch 'dev'
             }
             steps {
-                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                withCredentials([aws(credentialsId: env.Devops-project-id)]) {
                     script {
                         echo "Displaying Terraform outputs:"
                         sh '/bin/bash -c "terraform output"'
