@@ -8,6 +8,7 @@ pipeline {
         // AWS credentials will be injected securely using your existing credential
         AWS_CREDENTIAL = 'Devops-project-id'
         SSH_CRED_ID = 'ssh-private-key'
+        PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${env.PATH}"
     }
     
     stages {
@@ -24,11 +25,11 @@ pipeline {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Initializing Terraform for branch: ${env.BRANCH_NAME}"
-                        sh 'terraform init'
+                        sh '/bin/bash -c "terraform init"'
                         
                         // Display the contents of the branch-specific tfvars file
                         echo "Displaying ${env.BRANCH_NAME}.tfvars configuration:"
-                        sh """
+                        sh """#!/bin/bash
                             if [ -f ${env.BRANCH_NAME}.tfvars ]; then
                                 echo "==== Contents of ${env.BRANCH_NAME}.tfvars ===="
                                 cat ${env.BRANCH_NAME}.tfvars
@@ -49,7 +50,7 @@ pipeline {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Generating Terraform plan for ${env.BRANCH_NAME} environment"
-                        sh """
+                        sh """#!/bin/bash
                             terraform plan \
                                 -var-file=${env.BRANCH_NAME}.tfvars \
                                 -out=${env.BRANCH_NAME}.tfplan
@@ -89,7 +90,7 @@ pipeline {
             }
         }
         
-        // Optional: Terraform Apply (for future use)
+        // Terraform Apply (executes after approval)
         stage('Terraform Apply') {
             when {
                 branch 'dev'
@@ -98,7 +99,7 @@ pipeline {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Applying Terraform plan for ${env.BRANCH_NAME} environment"
-                        sh """
+                        sh """#!/bin/bash
                             terraform apply \
                                 -auto-approve \
                                 ${env.BRANCH_NAME}.tfplan
@@ -109,7 +110,7 @@ pipeline {
             }
         }
         
-        // Optional: Display Outputs
+        // Display Outputs
         stage('Show Outputs') {
             when {
                 branch 'dev'
@@ -118,7 +119,7 @@ pipeline {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Displaying Terraform outputs:"
-                        sh 'terraform output'
+                        sh '/bin/bash -c "terraform output"'
                     }
                 }
             }
@@ -133,13 +134,19 @@ pipeline {
             echo "Pipeline failed for branch: ${env.BRANCH_NAME}"
         }
         always {
-            cleanWs(
-                deleteDirs: true,
-                patterns: [
-                    [pattern: '*.tfplan', type: 'INCLUDE'],
-                    [pattern: '.terraform/', type: 'INCLUDE']
-                ]
-            )
+            script {
+                try {
+                    cleanWs(
+                        deleteDirs: true,
+                        patterns: [
+                            [pattern: '*.tfplan', type: 'INCLUDE'],
+                            [pattern: '.terraform/', type: 'INCLUDE']
+                        ]
+                    )
+                } catch (Exception e) {
+                    echo "Workspace cleanup skipped: ${e.message}"
+                }
+            }
         }
     }
 }
