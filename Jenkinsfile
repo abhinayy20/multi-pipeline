@@ -25,26 +25,28 @@ pipeline {
                     script {
                         echo "Initializing Terraform for branch: ${env.BRANCH_NAME}"
                         sh 'terraform init'
-                    
-                    // Display the contents of the branch-specific tfvars file
-                    echo "Displaying ${env.BRANCH_NAME}.tfvars configuration:"
-                    sh """
-                        if [ -f ${env.BRANCH_NAME}.tfvars ]; then
-                            echo "==== Contents of ${env.BRANCH_NAME}.tfvars ===="
-                            cat ${env.BRANCH_NAME}.tfvars
-                            echo "=============================================="
-                        else
-                            echo "Warning: ${env.BRANCH_NAME}.tfvars not found!"
-                            exit 1
-                        fi
+                        
+                        // Display the contents of the branch-specific tfvars file
+                        echo "Displaying ${env.BRANCH_NAME}.tfvars configuration:"
+                        sh """
+                            if [ -f ${env.BRANCH_NAME}.tfvars ]; then
+                                echo "==== Contents of ${env.BRANCH_NAME}.tfvars ===="
+                                cat ${env.BRANCH_NAME}.tfvars
+                                echo "=============================================="
+                            else
+                                echo "Warning: ${env.BRANCH_NAME}.tfvars not found!"
+                                exit 1
+                            fi
+                        """
                     }
-                    """
                 }
             }
         }
         
         // Task 4: Branch-Specific Terraform Planning (20 Marks)
-        stage('TwithCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Generating Terraform plan for ${env.BRANCH_NAME} environment"
                         sh """
@@ -54,8 +56,6 @@ pipeline {
                         """
                         echo "Terraform plan generated successfully!"
                     }
-                    """
-                    echo "Terraform plan generated successfully!"
                 }
             }
         }
@@ -92,6 +92,9 @@ pipeline {
         // Optional: Terraform Apply (for future use)
         stage('Terraform Apply') {
             when {
+                branch 'dev'
+            }
+            steps {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Applying Terraform plan for ${env.BRANCH_NAME} environment"
@@ -102,24 +105,21 @@ pipeline {
                         """
                         echo "Infrastructure deployed successfully!"
                     }
-                            ${env.BRANCH_NAME}.tfplan
-                    """
-                    echo "Infrastructure deployed successfully!"
                 }
             }
         }
         
         // Optional: Display Outputs
-        stage('SwithCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+        stage('Show Outputs') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
                         echo "Displaying Terraform outputs:"
                         sh 'terraform output'
                     }
-            }
-            steps {
-                script {
-                    echo "Displaying Terraform outputs:"
-                    sh 'terraform output'
                 }
             }
         }
