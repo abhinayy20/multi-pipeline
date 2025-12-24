@@ -1,0 +1,11 @@
+- name: Verify Splunk is running
+  hosts: splunk
+  become: yes
+
+  tasks:
+    - name: Check Splunk status
+      command: /opt/splunk/bin/splunk status
+      register: splunk_status
+
+    - debug:
+        var: splunk_status.stdout

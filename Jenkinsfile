@@ -12,6 +12,15 @@ pipeline {
     }
     
     stages {
+        // Task 1: Automated Triggering via ngrok (20 Marks)
+        stage('Ngrok & Webhook Setup') {
+            when { beforeAgent true; expression { env.BRANCH_NAME == 'dev' } }
+            steps {
+                echo "Ensure ngrok is running: ngrok http 8080 (or Jenkins port)"
+                echo "Set GitHub webhook to: https://<ngrok-url>/github-webhook/"
+                echo "This stage is informational. Manual setup required unless automated externally."
+            }
+        }
         stage('Checkout') {
             steps {
                 checkout scm
@@ -110,16 +119,87 @@ pipeline {
             }
         }
         
-        // Display Outputs
-        stage('Show Outputs') {
+        // Task 6: Provisioning & Output Capture (20 Marks)
+        stage('Capture Outputs & Inventory') {
             when {
                 branch 'dev'
             }
             steps {
                 withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
                     script {
-                        echo "Displaying Terraform outputs:"
-                        sh '/bin/bash -c "terraform output"'
+                        echo "Capturing Terraform outputs and writing dynamic inventory..."
+                        def instance_ip = sh(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
+                        def instance_id = sh(script: 'terraform output -raw instance_id', returnStdout: true).trim()
+                        env.INSTANCE_IP = instance_ip
+                        env.INSTANCE_ID = instance_id
+                        writeFile file: 'dynamic_inventory.ini', text: "[ec2]\n${instance_ip} ansible_user=ubuntu ansible_ssh_private_key_file=${env.SSH_CRED_ID}\n"
+                        echo "dynamic_inventory.ini created for Ansible."
+                    }
+                }
+            }
+        }
+
+        // Task 7: AWS Health Status Verification (20 Marks)
+        stage('AWS Health Check') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                    script {
+                        echo "Waiting for EC2 instance health checks to pass..."
+                        sh "aws ec2 wait instance-status-ok --instance-ids ${env.INSTANCE_ID}"
+                        echo "EC2 instance is healthy."
+                    }
+                }
+            }
+        }
+
+        // Task 8: Splunk Installation & Testing (20 Marks)
+        stage('Splunk Install & Test') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                script {
+                    echo "Running Splunk installation playbook..."
+                    ansiblePlaybook inventory: 'dynamic_inventory.ini', playbook: 'playbooks/splunk.yml'
+                    echo "Testing Splunk service..."
+                    ansiblePlaybook inventory: 'dynamic_inventory.ini', playbook: 'playbooks/test-splunk.yml'
+                }
+            }
+        }
+
+        // Task 9: Infrastructure Destruction & Post-Build Actions (20 Marks)
+        stage('Validate Destroy') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                script {
+                    def destroyInput = input(
+                        id: 'DestroyGate',
+                        message: 'Do you want to destroy the infrastructure?',
+                        parameters: [choice(name: 'DESTROY', choices: ['Yes', 'No'], description: 'Select Yes to destroy infra')]
+                    )
+                    if (destroyInput == 'Yes') {
+                        echo "Destroy approved. Proceeding..."
+                    } else {
+                        error "Destroy rejected by user. Aborting destroy stage."
+                    }
+                }
+            }
+        }
+        stage('Terraform Destroy') {
+            when {
+                branch 'dev'
+            }
+            steps {
+                withCredentials([aws(credentialsId: env.AWS_CREDENTIAL)]) {
+                    script {
+                        echo "Destroying infrastructure..."
+                        sh "terraform destroy -auto-approve -var-file=${env.BRANCH_NAME}.tfvars"
+                        echo "Infrastructure destroyed."
                     }
                 }
             }
@@ -132,10 +212,33 @@ pipeline {
         }
         failure {
             echo "Pipeline failed for branch: ${env.BRANCH_NAME}"
+            script {
+                echo "Triggering destroy on failure..."
+                try {
+                    sh "terraform destroy -auto-approve -var-file=${env.BRANCH_NAME}.tfvars"
+                } catch (Exception e) {
+                    echo "Auto-destroy failed: ${e.message}"
+                }
+            }
+        }
+        aborted {
+            echo "Pipeline aborted for branch: ${env.BRANCH_NAME}"
+            script {
+                echo "Triggering destroy on abort..."
+                try {
+                    sh "terraform destroy -auto-approve -var-file=${env.BRANCH_NAME}.tfvars"
+                } catch (Exception e) {
+                    echo "Auto-destroy failed: ${e.message}"
+                }
+            }
         }
         always {
             script {
                 try {
+                    if (fileExists('dynamic_inventory.ini')) {
+                        sh 'rm -f dynamic_inventory.ini'
+                        echo "dynamic_inventory.ini deleted."
+                    }
                     cleanWs(
                         deleteDirs: true,
                         patterns: [
